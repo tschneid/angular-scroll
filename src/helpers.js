@@ -147,10 +147,10 @@ angular.module('duScroll.scrollHelpers', ['duScroll.requestAnimation'])
   //Add duration and easing functionality to existing jQuery getter/setters
   var overloadScrollPos = function(superFn, overloadFn) {
     return function(value, duration, easing) {
-      if(duration) {
+      //if(duration) {
         return overloadFn.apply(this, arguments);
-      }
-      return superFn.apply(this, arguments);
+      //}
+      //return superFn.apply(this, arguments);
     };
   };
 

@@ -26,8 +26,9 @@ angular.module('duScroll', [
   //Default offset for smoothScroll directive
   .value('duScrollOffset', 0)
   //Default easing function for scroll animation
-  .value('duScrollEasing', duScrollDefaultEasing);
-
+  .value('duScrollEasing', duScrollDefaultEasing)
+  //Whether or not to activate the last scrollspy, when page/container bottom is reached
+  .value('duScrollActivateBottomSpy', true);
 
 angular.module('duScroll.scrollHelpers', ['duScroll.requestAnimation'])
 .run(["$window", "$q", "cancelAnimation", "requestAnimation", "duScrollEasing", "duScrollDuration", "duScrollOffset", function($window, $q, cancelAnimation, requestAnimation, duScrollEasing, duScrollDuration, duScrollOffset) {
@@ -178,10 +179,10 @@ angular.module('duScroll.scrollHelpers', ['duScroll.requestAnimation'])
   //Add duration and easing functionality to existing jQuery getter/setters
   var overloadScrollPos = function(superFn, overloadFn) {
     return function(value, duration, easing) {
-      if(duration) {
+      //if(duration) {
         return overloadFn.apply(this, arguments);
-      }
-      return superFn.apply(this, arguments);
+      //}
+      //return superFn.apply(this, arguments);
     };
   };
 
@@ -241,7 +242,7 @@ angular.module('duScroll.requestAnimation', ['duScroll.polyfill'])
 
 
 angular.module('duScroll.spyAPI', ['duScroll.scrollContainerAPI'])
-.factory('spyAPI', ["$rootScope", "$timeout", "scrollContainerAPI", "duScrollGreedy", "duScrollSpyWait", function($rootScope, $timeout, scrollContainerAPI, duScrollGreedy, duScrollSpyWait) {
+.factory('spyAPI', ["$rootScope", "$timeout", "$window", "$document", "scrollContainerAPI", "duScrollGreedy", "duScrollSpyWait", "duScrollActivateBottomSpy", function($rootScope, $timeout, $window, $document, scrollContainerAPI, duScrollGreedy, duScrollSpyWait, duScrollActivateBottomSpy) {
   'use strict';
 
   var createScrollHandler = function(context) {
@@ -252,7 +253,8 @@ angular.module('duScroll.spyAPI', ['duScroll.scrollContainerAPI'])
           containerEl = container[0],
           containerOffset = 0;
 
-      if (typeof HTMLElement !== 'undefined' && containerEl instanceof HTMLElement || containerEl.nodeType && containerEl.nodeType === containerEl.ELEMENT_NODE) {
+      var inContainer = (typeof HTMLElement !== 'undefined' && containerEl instanceof HTMLElement || containerEl.nodeType && containerEl.nodeType === containerEl.ELEMENT_NODE);
+      if (inContainer) {
         containerOffset = containerEl.getBoundingClientRect().top;
       }
 
@@ -261,17 +263,39 @@ angular.module('duScroll.spyAPI', ['duScroll.scrollContainerAPI'])
       currentlyActive = context.currentlyActive;
       toBeActive = undefined;
 
-      for(i = 0; i < spies.length; i++) {
-        spy = spies[i];
-        pos = spy.getTargetPosition();
-        if (!pos) continue;
+      var containerBottomReached = (containerEl.scrollTop + containerEl.clientHeight >= containerEl.scrollHeight);
+      var pageBottomReached = ($window.scrollY + $window.innerHeight >= $document[0].body.scrollHeight);
 
-        if(pos.top + spy.offset - containerOffset < 20 && (pos.top*-1 + containerOffset) < pos.height) {
-          if(!toBeActive || toBeActive.top < pos.top) {
-            toBeActive = {
-              top: pos.top,
-              spy: spy
-            };
+      // If the bottom of the container/page is reached, activate the last spy.
+      if (duScrollActivateBottomSpy && ((inContainer && containerBottomReached) || (!inContainer && pageBottomReached))) {
+        var getSpyOnBottom = function() {
+          var posmax = -Infinity, imax, pos;
+          for (i = 0; i < spies.length; ++i) {
+            pos = spies[i].getTargetPosition().bottom;
+            if (pos > posmax) {
+              posmax = pos;
+              imax = i;
+            }
+          }
+          return spies[imax];
+        };
+        spy = getSpyOnBottom();
+        toBeActive = {
+          spy: spy,
+          top: spy.getTargetPosition()
+        };
+      } else {
+        for(i = 0; i < spies.length; i++) {
+          spy = spies[i];
+          pos = spy.getTargetPosition();
+          if (!pos) continue;
+          if(pos.top + spy.offset - containerOffset < 20 && (pos.top*-1 + containerOffset) < pos.height) {
+            if(!toBeActive || toBeActive.top < pos.top) {
+              toBeActive = {
+                top: pos.top,
+                spy: spy
+              };
+            }
           }
         }
       }
@@ -395,6 +419,7 @@ angular.module('duScroll.spyAPI', ['duScroll.scrollContainerAPI'])
     if(i !== -1) {
       context.spies.splice(i, 1);
     }
+    spy.$element = null;
   };
 
   return {
